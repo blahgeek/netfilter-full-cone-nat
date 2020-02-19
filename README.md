@@ -33,7 +33,8 @@ iptables -t nat -A POSTROUTING -o eth0 -p udp -j MASQUERADE --to-ports 40000-600
 ```
 
 
----
+Original README
+=========
 
 Implementation of RFC3489-compatible full cone SNAT.
 
