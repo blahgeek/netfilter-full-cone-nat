@@ -36,6 +36,10 @@
 #define NF_NAT_RANGE_PROTO_RANDOM_FULLY (1 << 4)
 #endif
 
+#ifndef NF_NAT_RANGE_PROTO_ADDRESS_RESTRICTED
+#define NF_NAT_RANGE_PROTO_ADDRESS_RESTRICTED (1 << 5)
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0)
 
 static inline int nf_ct_netns_get(struct net *net, u8 nfproto) { return 0; }
@@ -210,6 +214,20 @@ static void destroy_mappings(void) {
   }
 
   spin_unlock_bh(&fullconenat_lock);
+}
+
+static int check_mapping_address_restricted(struct nat_mapping* mapping, __be32 target_ip) {
+  struct list_head *iter, *tmp;
+  struct nat_mapping_original_tuple *original_tuple_item;
+
+  list_for_each_safe(iter, tmp, &mapping->original_tuple_list) {
+    original_tuple_item = list_entry(iter, struct nat_mapping_original_tuple, node);
+
+    if ((original_tuple_item->tuple.dst).u3.ip == target_ip)
+      return 1;
+  }
+
+  return 0;
 }
 
 /* check if a mapping is valid.
@@ -533,19 +551,26 @@ static unsigned int fullconenat_tg(struct sk_buff *skb, const struct xt_action_p
       return ret;
     }
     if (check_mapping(mapping, net, zone)) {
-      newrange.flags = NF_NAT_RANGE_MAP_IPS | NF_NAT_RANGE_PROTO_SPECIFIED;
-      newrange.min_addr.ip = mapping->int_addr;
-      newrange.max_addr.ip = mapping->int_addr;
-      newrange.min_proto.udp.port = cpu_to_be16(mapping->int_port);
-      newrange.max_proto = newrange.min_proto;
+      if (!(range->flags & NF_NAT_RANGE_PROTO_ADDRESS_RESTRICTED) ||
+           check_mapping_address_restricted(mapping, (ct_tuple_origin->src).u3.ip)) {
+        newrange.flags = NF_NAT_RANGE_MAP_IPS | NF_NAT_RANGE_PROTO_SPECIFIED;
+        newrange.min_addr.ip = mapping->int_addr;
+        newrange.max_addr.ip = mapping->int_addr;
+        newrange.min_proto.udp.port = cpu_to_be16(mapping->int_port);
+        newrange.max_proto = newrange.min_proto;
 
-      pr_debug("xt_FULLCONENAT: <INBOUND DNAT> %s ==> %pI4:%d\n", nf_ct_stringify_tuple(ct_tuple_origin), &mapping->int_addr, mapping->int_port);
+        pr_debug("xt_FULLCONENAT: <INBOUND DNAT> %s ==> %pI4:%d\n",
+                 nf_ct_stringify_tuple(ct_tuple_origin), &mapping->int_addr, mapping->int_port);
 
-      ret = nf_nat_setup_info(ct, &newrange, HOOK2MANIP(xt_hooknum(par)));
+        ret = nf_nat_setup_info(ct, &newrange, HOOK2MANIP(xt_hooknum(par)));
 
-      if (ret == NF_ACCEPT) {
-        add_original_tuple_to_mapping(mapping, ct_tuple_origin);
-        pr_debug("xt_FULLCONENAT: fullconenat_tg(): INBOUND: refer_count for mapping at ext_port %d is now %d\n", mapping->port, mapping->refer_count);
+        if (ret == NF_ACCEPT) {
+          add_original_tuple_to_mapping(mapping, ct_tuple_origin);
+          pr_debug("xt_FULLCONENAT: fullconenat_tg(): INBOUND: refer_count for mapping at ext_port %d is now %d\n", mapping->port, mapping->refer_count);
+        }
+      } else {
+        pr_debug("xt_FULLCONENAT: <INBOUND RESTRICTED> %s ==> %pI4:%d\n",
+                 nf_ct_stringify_tuple(ct_tuple_origin), &mapping->int_addr, mapping->int_port);
       }
     }
     spin_unlock_bh(&fullconenat_lock);

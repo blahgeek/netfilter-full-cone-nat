@@ -12,11 +12,16 @@
 #define NF_NAT_RANGE_PROTO_RANDOM_FULLY (1 << 4)
 #endif
 
+#ifndef NF_NAT_RANGE_PROTO_ADDRESS_RESTRICTED
+#define NF_NAT_RANGE_PROTO_ADDRESS_RESTRICTED (1 << 5)
+#endif
+
 enum {
 	O_TO_PORTS = 0,
 	O_RANDOM,
 	O_RANDOM_FULLY,
 	O_TO_SRC,
+	O_ADDRESS_RESTRICTED,
 };
 
 static void FULLCONENAT_help(void)
@@ -27,6 +32,8 @@ static void FULLCONENAT_help(void)
 "				Address to map source to.\n"
 " --to-ports <port>[-<port>]\n"
 "				Port (range) to map to.\n"
+" --address-restricted\n"
+"				Address restricted NAT.\n"
 " --random\n"
 "				Randomize source port.\n"
 " --random-fully\n"
@@ -38,6 +45,7 @@ static const struct xt_option_entry FULLCONENAT_opts[] = {
 	{.name = "random", .id = O_RANDOM, .type = XTTYPE_NONE},
 	{.name = "random-fully", .id = O_RANDOM_FULLY, .type = XTTYPE_NONE},
 	{.name = "to-source", .id = O_TO_SRC, .type = XTTYPE_STRING},
+	{.name = "address-restricted", .id = O_ADDRESS_RESTRICTED, .type = XTTYPE_NONE},
 	XTOPT_TABLEEND,
 };
 
@@ -147,6 +155,9 @@ static void FULLCONENAT_parse(struct xt_option_call *cb)
 	case O_RANDOM_FULLY:
 		mr->range[0].flags |=  NF_NAT_RANGE_PROTO_RANDOM_FULLY;
 		break;
+	case O_ADDRESS_RESTRICTED:
+		mr->range[0].flags |=  NF_NAT_RANGE_PROTO_ADDRESS_RESTRICTED;
+		break;
 	}
 }
 
@@ -180,6 +191,9 @@ FULLCONENAT_print(const void *ip, const struct xt_entry_target *target,
 
 	if (r->flags & NF_NAT_RANGE_PROTO_RANDOM_FULLY)
 		printf(" random-fully");
+
+	if (r->flags & NF_NAT_RANGE_PROTO_ADDRESS_RESTRICTED)
+		printf(" address-restricted");
 }
 
 static void
@@ -210,6 +224,9 @@ FULLCONENAT_save(const void *ip, const struct xt_entry_target *target)
 
 	if (r->flags & NF_NAT_RANGE_PROTO_RANDOM_FULLY)
 		printf(" --random-fully");
+
+	if (r->flags & NF_NAT_RANGE_PROTO_ADDRESS_RESTRICTED)
+		printf(" --address-restricted");
 }
 
 static struct xtables_target fullconenat_tg_reg = {
