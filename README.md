@@ -1,3 +1,39 @@
+Fork Note
+==========
+
+Implemented `--address-restricted` option to simulate Address restricted cone NAT.
+
+To summary, here's how to configure different types of NAT:
+
+1. Full cone NAT
+
+```
+iptables -t nat -A POSTROUTING -p udp -o eth0 -j FULLCONENAT --to-ports 40000-60000
+iptables -t nat -A PREROUTING -p udp -m multiport --dports 40000:60000 -i eth0 -j FULLCONENAT
+```
+
+2. Address restricted cone NAT
+
+```
+iptables -t nat -A POSTROUTING -p udp -o eth0 -j FULLCONENAT --to-ports 40000-60000
+iptables -t nat -A PREROUTING -p udp -m multiport --dports 40000:60000 -i eth0 -j FULLCONENAT --address-restricted
+```
+
+3. Port restricted cone NAT
+
+```
+iptables -t nat -A POSTROUTING -p udp -o eth0 -j FULLCONENAT --to-ports 40000-60000
+# No PREROUTING rules
+```
+
+4. Symmetric NAT
+
+```
+iptables -t nat -A POSTROUTING -o eth0 -p udp -j MASQUERADE --to-ports 40000-60000 --random-fully
+```
+
+
+---
 
 Implementation of RFC3489-compatible full cone SNAT.
 
